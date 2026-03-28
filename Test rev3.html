@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>ค้นหาข้อมูล CSV</title>
+<style>
+    body { font-family: Arial; padding: 20px; }
+    input { margin: 5px; padding: 5px; width: 250px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+</style>
+</head>
+
+<body>
+
+<h2>ค้นหาข้อมูล</h2>
+
+<label>Vendor Name: </label>
+<input type="text" id="vendor"><br>
+
+<label>JDE Stock No: </label>
+<input type="text" id="jde"><br>
+
+<label>SAP Stock No: </label>
+<input type="text" id="sap"><br>
+
+<label>Brand: </label>
+<input type="text" id="brand"><br>
+
+<button onclick="searchData()">ค้นหา</button>
+
+<table id="resultTable">
+    <thead>
+        <tr id="headerRow"></tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+let data = [];
+let targetColumns = [
+    "Vendor Name",
+    "JDE Stock No",
+    "SAP Stock No",
+    "Brand",
+    "Supplier Description",
+    "Unit Price",
+    "Lead Time",
+    "Start Date",
+    "End Date",
+    "Quotation No",
+    "Credit Term"
+];
+
+fetch("data.csv")
+    .then(res => res.text())
+    .then(text => {
+        const rows = text.split(/\r?\n/).map(r => r.split(","));
+        const headers = rows[0];
+
+        // สร้างตาราง header เฉพาะคอลัมน์ที่ต้องการ
+        const headerRow = document.getElementById("headerRow");
+        headerRow.innerHTML = "";
+        targetColumns.forEach(col => headerRow.innerHTML += `<th>${col}</th>`);
+
+        // แปลงข้อมูลเป็น array ของ object
+        data = rows.slice(1).map(row => {
+            let obj = {};
+            headers.forEach((h, i) => {
+                obj[h] = row[i] ? row[i].trim() : "";
+            });
+            return obj;
+        });
+    });
+
+function searchData() {
+    const vendor = document.getElementById("vendor").value.trim().toLowerCase();
+    const jde = document.getElementById("jde").value.trim().toLowerCase();
+    const sap = document.getElementById("sap").value.trim().toLowerCase();
+    const brand = document.getElementById("brand").value.trim().toLowerCase();
+
+    const tbody = document.querySelector("#resultTable tbody");
+    tbody.innerHTML = "";
+
+    // ไม่กรอกอะไรเลย → ไม่แสดงผล
+    if (!vendor && !jde && !sap && !brand) return;
+
+   const filtered = data.filter(row => {
+    const vMatch = vendor ? (row["Vendor Name"] || "").toLowerCase().includes(vendor) : true;
+    const jdeMatch = jde ? (row["JDE Stock No"] || "").toLowerCase().includes(jde) : true;
+    const sapMatch = sap ? (row["SAP Stock No"] || "").toLowerCase().includes(sap) : true;
+    const brandMatch = brand ? (row["Brand"] || "").toLowerCase().includes(brand) : true;
+
+    return vMatch && jdeMatch && sapMatch && brandMatch;
+});
+    if (filtered.length === 0) return;
+
+    filtered.forEach(row => {
+        let tr = "<tr>";
+        targetColumns.forEach(col => {
+            tr += `<td>${row[col] || ""}</td>`;
+        });
+        tr += "</tr>";
+        tbody.innerHTML += tr;
+    });
+}
+</script>
+
+</body>
+</html>

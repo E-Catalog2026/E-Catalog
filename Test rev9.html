@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CSV / XLSX Search System</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+body { font-family: Arial, sans-serif; background:#f4f6f9; margin:0; padding:30px; color:#333; }
+.container { max-width:1500px; margin:auto; background:#fff; padding:25px; border-radius:16px; box-shadow:0 4px 20px rgba(0,0,0,0.08);}
+h2 { text-align:center; margin-bottom:25px; font-size:26px; font-weight:700; color:#2c3e50;}
+.form-group { display:grid; grid-template-columns:150px 1fr; gap:10px; margin-bottom:12px;}
+label { font-weight:600; padding-top:6px;}
+input[type=text], input[type=file], select { padding:10px; border:1px solid #ccc; border-radius:8px; font-size:15px;}
+button { display:flex; align-items:center; justify-content:center; gap:5px; width:100%; margin-top:15px; padding:12px; background:#0066ffef; color:#fff; border:none; border-radius:10px; font-size:18px; cursor:pointer; transition:0.2s;}
+button:hover { background:#004ecc; }
+table { width:100%; border-collapse:collapse; margin-top:25px; font-size:15px;}
+th { background:#0066ff; color:#fff; padding:10px; position:sticky; top:0;}
+td { padding:10px; border-bottom:1px solid #ddd;}
+tr:nth-child(even){ background:#f2f7ff;}
+.no-data{text-align:center;padding:15px;color:#999;}
+#overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);color:#fff;font-size:24px;text-align:center;padding-top:20%;z-index:999;}
+</style>
+</head>
+<body>
+
+<div class="container">
+<h2>Information Search System</h2>
+
+<div class="form-group">
+    <label>Select File (.CSV/.XLSX):</label>
+    <input type="file" id="dataFile" accept=".csv,.xlsx,.xls">
+</div>
+
+<div class="form-group" id="sheetSelectorGroup" style="display:none;">
+    <label>Select Sheet:</label>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+    <select id="sheetSelector"></select>
+</div>
+
+<div class="form-group"><label>Vendor Name:</label><input type="text" id="vendor"></div>
+<div class="form-group"><label>JDE Stock No:</label><input type="text" id="jde"></div>
+<div class="form-group"><label>SAP Stock No:</label><input type="text" id="sap"></div>
+<div class="form-group"><label>Brand:</label><input type="text" id="brand"></div>
+
+<button id="searchBtn"><span class="material-icons">search</span>Search</button>
+
+<table id="resultTable">
+    <thead><tr id="headerRow"></tr></thead>
+    <tbody></tbody>
+</table>
+
+<div id="overlay">Processing...</div>
+
+<script>
+let data = [];
+let xlsxFileData = null;
+const targetColumns = [
+"Vendor Name","JDE Stock No","SAP Stock No","Brand",
+"Supplier Description","Unit Price","Lead Time",
+"Start Date","End Date","Quotation No","Credit Term"
+];
+
+const headerRow = document.getElementById("headerRow");
+headerRow.innerHTML = targetColumns.map(col=>`<th>${col}</th>`).join("");
+
+function escapeHTML(str){return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");}
+function showOverlay(show){document.getElementById("overlay").style.display = show?"block":"none";}
+
+// --- File Upload Handler ---
+document.getElementById("dataFile").addEventListener("change", function(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    if(file.size>10*1024*1024){ alert("File too large (max 10MB)"); return;}
+    const ext = file.name.split(".").pop().toLowerCase();
+    if(!["csv","xlsx","xls"].includes(ext)){ alert("Invalid file type."); return;}
+
+    data=[];
+    document.querySelector("#resultTable tbody").innerHTML="";
+    document.getElementById("sheetSelectorGroup").style.display="none";
+    showOverlay(true);
+
+    if(ext==="csv"){
+        Papa.parse(file,{
+            header:true,
+            skipEmptyLines:true,
+            complete:function(results){processRows(results.data,results.meta.fields);},
+            error:function(err){alert("CSV error: "+err.message);showOverlay(false);}
+        });
+    } else {
+        const reader = new FileReader();
+        reader.onload = function(evt){
+            try {
+                const wb = XLSX.read(evt.target.result,{type:"array"});
+                xlsxFileData = wb;
+                const selector = document.getElementById("sheetSelector");
+                selector.innerHTML = wb.SheetNames.map(name=>`<option value="${name}">${name}</option>`).join("");
+                document.getElementById("sheetSelectorGroup").style.display="block";
+                loadSheetData(wb.SheetNames[0]);
+            } catch(err){ alert("XLSX error: "+err.message); showOverlay(false);}
+        };
+        reader.readAsArrayBuffer(file);
+    }
+});
+
+// --- Load Sheet ---
+function loadSheetData(sheetName){
+    if(!xlsxFileData) return;
+    const rows = XLSX.utils.sheet_to_json(xlsxFileData.Sheets[sheetName], {
+        defval: "",
+        raw: false // ให้แปลง format ตาม Excel
+    });
+    const headers = Object.keys(rows[0]||{});
+    processRows(rows, headers);
+}
+
+// --- Process Rows ---
+function processRows(rows, rawHeaders){
+    try{
+        rawHeaders[0] = rawHeaders[0]?.replace(/^\ufeff/,"");
+        const headerMap={};
+        rawHeaders.forEach(h=>headerMap[h.toLowerCase()]=h);
+        const missing = targetColumns.filter(col=>!headerMap[col.toLowerCase()]);
+        if(missing.length>0){ alert("Missing columns: "+missing.join(",")); showOverlay(false); return;}
+        data = rows.map(row=>{
+            const obj={};
+            targetColumns.forEach(col=>{
+                const actualCol = headerMap[col.toLowerCase()];
+                let val = row[actualCol]==null?"":row[actualCol].toString().trim();
+
+                // แปลงวันเป็น DD-MM-YYYY
+                if(["Start Date","End Date"].includes(col) && val){
+                    const d = new Date(val);
+                    if(!isNaN(d)) val = `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+                }
+
+                obj[col] = val;
+            });
+            return obj;
+        });
+    } catch(err){ alert("Parsing error: "+err.message); data=[];}
+    showOverlay(false);
+}
+
+// --- Sheet Selector Change ---
+document.getElementById("sheetSelector").addEventListener("change", function(){ loadSheetData(this.value); });
+
+// --- Search Function ---
+function searchData(){
+    if(data.length===0){ alert("Please upload a file first."); return;}
+    showOverlay(true);
+
+    const vendor = document.getElementById("vendor").value.trim().toLowerCase();
+    const jde = document.getElementById("jde").value.trim().toLowerCase();
+    const sap = document.getElementById("sap").value.trim().toLowerCase();
+    const brand = document.getElementById("brand").value.trim().toLowerCase();
+
+    const tbody = document.querySelector("#resultTable tbody");
+    tbody.innerHTML="";
+
+    if(!vendor && !jde && !sap && !brand){
+        tbody.innerHTML=`<tr><td colspan="${targetColumns.length}" class="no-data">No data found</td></tr>`;
+        showOverlay(false); return;
+    }
+
+    const filtered = data.filter(row=>
+        (!vendor || row["Vendor Name"].toLowerCase().includes(vendor)) &&
+        (!jde || row["JDE Stock No"].toLowerCase().includes(jde)) &&
+        (!sap || row["SAP Stock No"].toLowerCase().includes(sap)) &&
+        (!brand || row["Brand"].toLowerCase().includes(brand))
+    );
+
+    if(filtered.length===0){
+        tbody.innerHTML=`<tr><td colspan="${targetColumns.length}" class="no-data">No data found</td></tr>`;
+    } else {
+        tbody.innerHTML = filtered.map(row=>`<tr>${targetColumns.map(col=>`<td>${escapeHTML(row[col])}</td>`).join("")}</tr>`).join("");
+    }
+    showOverlay(false);
+}
+
+// --- Enter key triggers search ---
+["vendor","jde","sap","brand"].forEach(id=>{
+    document.getElementById(id).addEventListener("keydown", e=>{
+        if(e.key==="Enter") searchData();
+    });
+});
+document.getElementById("searchBtn").addEventListener("click", searchData);
+</script>
+</body>
+</html>

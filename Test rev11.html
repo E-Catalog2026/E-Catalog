@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CSV / XLSX Search System (Updated)</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=document_search" />
+<!-- SheetJS + PapaParse (CDN). ถ้าต้องการ offline ให้ดาวน์โหลดไฟล์ .js มาเก็บ local แล้วเปลี่ยน src -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<style>
+body { font-family: Arial, sans-serif; background:#f4f6f9; margin:0; padding:30px; color:#333; }
+.container { max-width:1400px; margin:auto; background:#fff; padding:20px 28px; border-radius:12px; box-shadow:0 6px 30px rgba(0,0,0,0.06);}
+h2 { text-align:center; margin-bottom:18px; font-size:22px; font-weight:700; color:#21304a; display:flex; align-items:center; gap:10px; justify-content:center;}
+.form-group { display:grid; grid-template-columns:150px 1fr; gap:10px; margin-bottom:12px; align-items:center; }
+label { font-weight:600; padding-top:6px;}
+input[type=text], input[type=file], select { padding:10px; border:1px solid #d0d7e5; border-radius:8px; font-size:14px; width:100%; box-sizing:border-box; }
+#searchBtn {
+    display: inline-flex;           /* ให้อยู่ในบรรทัดเดียวกับไอคอน */
+    align-items: center;
+    justify-content: center;
+    gap: 8px;                       /* ระยะห่างระหว่างไอคอนกับข้อความ */
+    padding: 10px 18px;              /* ลดขนาด padding */
+    font-size: 18px;                 /* ลดขนาดข้อความ */
+    border-radius: 8px;              /* ปรับมุมให้เล็กลง */
+    background: #0066ffef;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: 0.2s;
+    margin: 20px auto 0 auto;       /* จัดให้อยู่กลางจอแนวนอน */
+    display: block;                  /* บังคับให้ margin auto ใช้ได้ */
+}
+#searchBtn:hover {
+    background: #004ecc;
+}
+.material-icons {
+    font-size:18px;
+    vertical-align:middle;
+}
+#searchBtn:hover { background:#004ecc; }
+.material-icons { font-size:18px; vertical-align:middle; }
+table { width:100%; border-collapse:collapse; margin-top:18px; font-size:14px; }
+th { background:#0b63ff; color:#fff; padding:10px; position:sticky; top:0; text-align:left; }
+td { padding:8px; border-bottom:1px solid #e6eefc; vertical-align:top; }
+tr:nth-child(even){ background:#fbfdff; }
+.no-data{text-align:center;padding:15px;color:#666;}
+#overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);color:#fff;font-size:20px;text-align:center;padding-top:18%;z-index:999;}
+.output-wrap { margin-top: 10px; max-height: 60vh; overflow:auto; }
+.note { font-size:13px; color:#666; margin-top:6px; text-align:center; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h2><span class="material-symbols-outlined">document_search</span> Information Search System</h2>
+
+    <div class="form-group">
+        <label>Select File (.CSV/.XLSX):</label>
+        <input type="file" id="dataFile" accept=".csv,.xlsx,.xls">
+    </div>
+
+    <div class="form-group" id="sheetSelectorGroup" style="display:none;">
+        <label>Select Sheet:</label>
+        <select id="sheetSelector"></select>
+    </div>
+
+    <div class="form-group"><label>Vendor Name:</label><input type="text" id="vendor" ></div>
+    <div class="form-group"><label>JDE Stock No:</label><input type="text" id="jde" ></div>
+    <div class="form-group"><label>SAP Stock No:</label><input type="text" id="sap" ></div>
+    <div class="form-group"><label>Brand:</label><input type="text" id="brand" ></div>
+
+    <button id="searchBtn"><span class="material-icons">search</span>Search</button>
+    <div class="note"></div>
+
+    <div class="output-wrap" id="output"></div>
+</div>
+
+<div id="overlay">Processing...</div>
+
+<script>
+/* -----------------------------
+   Alias lists (เพิ่มรูปแบบที่พบบ่อย)
+   สามารถเติม alias เพิ่มได้ที่นี่
+------------------------------*/
+const aliasLists = {
+  "jde stock no": [
+    "jde stock no","jde stock no.","jde stock number","jde item no","jde item number",
+    "jde code","jde code no","jde sku","jde","jde no","jdestockno","jde item","stock jde","jde code#"
+  ],
+  "sap stock no": [
+    "sap stock no","sap stock no.","sap stock number","sap item no","sap item number",
+    "sap code","sap code no","sap sku","sap material no","material no","material number","sap","sap no","sapitem"
+  ],
+  "quotation no": [
+    "quotation no","quotation no.","quotation number","quote no","quote no.","quote number",
+    "qt no","qt number","qtn no","qtn number","quotationno","quotation #","quote#","quotation"
+  ],
+  // Add flexible aliases for other columns too
+  "vendor name": ["vendor","vendor name","supplier","supplier name","vendorname"],
+  "brand": ["brand","brands","product brand","manufacturer"],
+  "supplier description": ["description","desc","supplier description","item description","product description"],
+  "unit price": ["unit price","price","unitprice","cost","unit cost","unit_cost","price per unit"],
+  "lead time": ["lead time","leadtime","lt","delivery time"],
+  "start date": ["start date","start","effective start","effective date"],
+  "end date": ["end date","end","expiry date","expire date","valid to","valid until","validto"]
+};
+
+/* helper: normalize header text */
+function norm(s){
+    return String(s||"").toLowerCase().replace(/\s+/g," ").replace(/[.\-_,]/g,"").trim();
+}
+
+/* try to map a header name to a standard key (if alias matches) */
+function matchAliasHeader(header){
+    const h = norm(header);
+    for(const std in aliasLists){
+        for(const alias of aliasLists[std]){
+            if(h === norm(alias)) return std;          // exact alias
+            // partial match: e.g. header contains alias tokens
+            if(h.includes(norm(alias))) return std;
+        }
+    }
+    // fallback regex-like checks
+    if(/\bjde\b/.test(h)) return "jde stock no";
+    if(/\bsap\b/.test(h)) return "sap stock no";
+    if(/\bquote|quotation|qtn|qt\b/.test(h)) return "quotation no";
+    if(/\bv(endor)?\b/.test(h) && h.includes("name")) return "vendor name";
+    if(/\bbrand\b/.test(h)) return "brand";
+    if(/\bunit.*price|price\b/.test(h)) return "unit price";
+    if(/\blead.*time|leadtime|lt\b/.test(h)) return "lead time";
+    if(/\bstart.*date|start\b/.test(h)) return "start date";
+    if(/\bend.*date|expiry|expire|valid\b/.test(h)) return "end date";
+    return null;
+}
+
+/* standard column order we will output & search by */
+const standardColumns = [
+  "Vendor Name","JDE Stock No","SAP Stock No","Brand",
+  "Supplier Description","Unit Price","Lead Time",
+  "Start Date","End Date","Quotation No","Credit Term"
+];
+
+/* format date to DD-MM-YYYY when possible */
+function formatToDDMMYYYY(v){
+    if(v === null || v === undefined || v === "") return "";
+    // If numeric (Excel date serial), try parse_date_code
+    if(typeof v === "number"){
+        try {
+            const obj = XLSX.SSF.parse_date_code(v);
+            if(obj && obj.y){
+                return `${String(obj.d).padStart(2,'0')}-${String(obj.m).padStart(2,'0')}-${obj.y}`;
+            }
+        } catch(e){}
+    }
+    // if already string, try Date parse
+    const dt = new Date(v);
+    if(!isNaN(dt)){
+        return `${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}-${dt.getFullYear()}`;
+    }
+    return String(v);
+}
+
+/* show/hide overlay */
+function showOverlay(show){ document.getElementById("overlay").style.display = show ? "block" : "none"; }
+
+/* state */
+let workbookCache = {}; // { sheetName: [rows...] }
+let currentSheetName = null;
+
+/* build normalized header mapping for a sheet */
+function buildHeaderMap(rawHeaders){
+    // rawHeaders: array of header strings (as in file)
+    const map = {}; // map standardLower -> actualHeaderName
+    rawHeaders.forEach(h => {
+        const found = matchAliasHeader(h);
+        if(found){
+            // store mapping (standardLower => original header)
+            map[found] = h;
+        } else {
+            // also map exact lower-cased header to itself for fallback
+            map[norm(h)] = h;
+        }
+    });
+    return map;
+}
+
+/* load file */
+document.getElementById("dataFile").addEventListener("change", function(e){
+    const f = e.target.files[0];
+    if(!f) return;
+    showOverlay(true);
+    workbookCache = {};
+    currentSheetName = null;
+    document.getElementById("sheetSelector").innerHTML = "";
+    document.getElementById("sheetSelectorGroup").style.display = "none";
+    document.getElementById("output").innerHTML = "";
+
+    const ext = (f.name.split(".").pop()||"").toLowerCase();
+    if(ext === "csv"){
+        Papa.parse(f, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (res) => {
+                // CSV has single "sheet" named by filename
+                const sheetName = f.name;
+                // Build header map from res.meta.fields
+                const headers = res.meta.fields || Object.keys(res.data[0]||{});
+                const headerMap = buildHeaderMap(headers);
+                const normalizedRows = res.data.map(r => normalizeRowByHeaderMap(r, headerMap));
+                workbookCache[sheetName] = normalizedRows;
+                populateSheetSelector([sheetName]);
+                showOverlay(false);
+            },
+            error: (err) => { showOverlay(false); alert("CSV parse error: "+err.message); }
+        });
+        return;
+    }
+
+    // XLSX
+    const reader = new FileReader();
+    reader.onload = function(evt){
+        try{
+            const wb = XLSX.read(evt.target.result, { type: "array" });
+            const sheetNames = wb.SheetNames || [];
+            // process each sheet
+            sheetNames.forEach(name => {
+                const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: "" , raw: false});
+                // get headers from first row keys
+                const headers = Object.keys(rows[0]||{});
+                const headerMap = buildHeaderMap(headers);
+                const normalizedRows = rows.map(r => normalizeRowByHeaderMap(r, headerMap));
+                workbookCache[name] = normalizedRows;
+            });
+            populateSheetSelector(sheetNames);
+            showOverlay(false);
+        } catch(err){
+            showOverlay(false);
+            alert("XLSX read error: " + (err && err.message ? err.message : err));
+        }
+    };
+    reader.readAsArrayBuffer(f);
+});
+
+/* normalize a single row given headerMap */
+function normalizeRowByHeaderMap(row, headerMap){
+    // row: original row with keys = original headers
+    // headerMap: standardLower -> actual header name (original)
+    const out = {};
+    // attempt to find for each standardColumns a matching original header
+    standardColumns.forEach(std => {
+        const keyLower = std.toLowerCase();
+        // direct mapping found?
+        let actual = headerMap[keyLower] ?? headerMap[norm(std)];
+        // also try the alias key names (like "jde stock no")
+        if(!actual){
+            // check aliasLists keys
+            for(const aliasKey in aliasLists){
+                if(aliasKey.replace(/\s+/g,'') === keyLower.replace(/\s+/g,'')){
+                    actual = headerMap[aliasKey];
+                    if(actual) break;
+                }
+            }
+        }
+        // fallback: look for any header in row that when normalized equals keyLower
+        if(!actual){
+            for(const h of Object.keys(row)){
+                if(norm(h) === keyLower){ actual = h; break; }
+            }
+        }
+        let val = "";
+        if(actual && (actual in row)) { val = row[actual]; }
+        // format dates
+        if(std === "Start Date" || std === "End Date"){
+            val = formatToDDMMYYYY(val);
+        }
+        out[std] = (val === null || val === undefined) ? "" : String(val).trim();
+    });
+    return out;
+}
+
+/* populate sheet selector */
+function populateSheetSelector(sheetNames){
+    const sel = document.getElementById("sheetSelector");
+    sel.innerHTML = "";
+    sheetNames.forEach((s, idx)=> {
+        const op = document.createElement("option");
+        op.value = s;
+        op.textContent = s;
+        sel.appendChild(op);
+    });
+    if(sheetNames.length>0){
+        document.getElementById("sheetSelectorGroup").style.display = "block";
+        sel.selectedIndex = 0;
+        currentSheetName = sel.value;
+        renderTableForSheet(currentSheetName);
+    } else {
+        document.getElementById("sheetSelectorGroup").style.display = "none";
+        document.getElementById("output").innerHTML = "<p class='no-data'>No sheets found</p>";
+    }
+}
+
+/* when sheet selection changes */
+document.getElementById("sheetSelector").addEventListener("change", function(){
+    currentSheetName = this.value;
+    renderTableForSheet(currentSheetName);
+});
+
+/* search button */
+document.getElementById("searchBtn").addEventListener("click", function(){ searchAndRender(); });
+
+/* Enter key triggers search in inputs */
+["vendor","jde","sap","brand"].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el){
+        el.addEventListener("keydown", e=>{
+            if(e.key === "Enter") searchAndRender();
+        });
+    }
+});
+
+/* search logic */
+function searchAndRender(){
+    if(!currentSheetName){
+        // if workbookCache has single sheet, pick it
+        const names = Object.keys(workbookCache);
+        if(names.length===1) currentSheetName = names[0];
+        else if(names.length===0){ alert("Please upload a file first."); return; }
+        else { currentSheetName = document.getElementById("sheetSelector").value; }
+    }
+    const rows = workbookCache[currentSheetName] || [];
+    const vendorQ = (document.getElementById("vendor").value||"").toLowerCase().trim();
+    const jdeQ = (document.getElementById("jde").value||"").toLowerCase().trim();
+    const sapQ = (document.getElementById("sap").value||"").toLowerCase().trim();
+    const brandQ = (document.getElementById("brand").value||"").toLowerCase().trim();
+
+    const filtered = rows.filter(r => {
+        return (!vendorQ || (r["Vendor Name"]||"").toLowerCase().includes(vendorQ)) &&
+               (!jdeQ || (r["JDE Stock No"]||"").toLowerCase().includes(jdeQ)) &&
+               (!sapQ || (r["SAP Stock No"]||"").toLowerCase().includes(sapQ)) &&
+               (!brandQ || (r["Brand"]||"").toLowerCase().includes(brandQ));
+    });
+    renderRows(filtered);
+}
+
+/* initial render (show sheet data without filters) */
+function renderTableForSheet(sheetName){
+    const rows = workbookCache[sheetName] || [];
+    renderRows(rows.slice(0, 200)); // show first 200 rows to avoid huge DOM
+    // note: after loading you can search to narrow down and show all matches
+}
+
+/* render rows to table */
+function renderRows(rows){
+    const out = document.getElementById("output");
+    if(!rows || rows.length === 0){
+        out.innerHTML = "<p class='no-data'>No data found</p>";
+        return;
+    }
+    const cols = standardColumns;
+    let html = "<table><thead><tr>";
+    cols.forEach(c => html += `<th>${escapeHTML(c)}</th>`);
+    html += "</tr></thead><tbody>";
+    rows.forEach(r => {
+        html += "<tr>";
+        cols.forEach(c => html += `<td>${escapeHTML(r[c]||"")}</td>`);
+        html += "</tr>";
+    });
+    html += "</tbody></table>";
+    out.innerHTML = html;
+}
+
+/* small escape function */
+function escapeHTML(s){ return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+/* helper used by earlier normalizeRowByHeaderMap */
+function formatToDDMMYYYY(v){
+    return formatToDDMMYYYY_inner(v);
+}
+function formatToDDMMYYYY_inner(v){
+    return formatToDDMMYYYY_inner2(v);
+}
+// to avoid name collision, implement final function:
+function formatToDDMMYYYY_inner2(v){
+    if(v === null || v === undefined || v === "") return "";
+    if(typeof v === "number"){
+        try {
+            const d = XLSX.SSF.parse_date_code(v);
+            if(d && d.y) return `${String(d.d).padStart(2,'0')}-${String(d.m).padStart(2,'0')}-${d.y}`;
+        } catch(e){}
+    }
+    const dt = new Date(v);
+    if(!isNaN(dt)) return `${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}-${dt.getFullYear()}`;
+    return String(v);
+}
+
+</script>
+</body>
+</html>

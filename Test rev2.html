@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>ค้นหาข้อมูลจาก Excel (CSV)</title>
+<style>
+    body { font-family: Arial; padding: 20px; }
+    input { margin: 5px; padding: 5px; width: 250px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+</style>
+</head>
+
+<body>
+
+<h2>Material Searh</h2>
+
+<label>Supplier: </label>
+<input type="text" id="supplier"><br>
+
+<label>Material: </label>
+<input type="text" id="material"><br>
+
+<label>Brand: </label>
+<input type="text" id="brand"><br>
+
+<label>Specification: </label>
+<input type="text" id="spec"><br>
+
+<label>Other: </label>
+<input type="text" id="all"><br>
+
+<button onclick="searchData()">Search</button>
+
+<table id="resultTable">
+    <thead>
+        <tr id="headerRow"></tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+let data = [];
+let headers = [];
+
+fetch("data.csv")
+    .then(response => response.text())
+    .then(text => {
+        const rows = text.split(/\r?\n/).map(r => r.split(","));
+        headers = rows[0];
+        data = rows.slice(1);
+
+        const headerRow = document.getElementById("headerRow");
+        headerRow.innerHTML = "";
+        headers.forEach(h => headerRow.innerHTML += `<th>${h}</th>`);
+    });
+
+function searchData() {
+    const s = document.getElementById("supplier").value.trim().toLowerCase();
+    const m = document.getElementById("material").value.trim().toLowerCase();
+    const b = document.getElementById("brand").value.trim().toLowerCase();
+    const sp = document.getElementById("spec").value.trim().toLowerCase();
+    const all = document.getElementById("all").value.trim().toLowerCase();
+
+    const tbody = document.querySelector("#resultTable tbody");
+    tbody.innerHTML = "";
+
+    // ถ้าไม่กรอกอะไรเลย ไม่ต้องแสดงข้อมูล
+    if (!s && !m && !b && !sp && !all) return;
+
+    const filtered = data.filter(row => {
+        const c0 = (row[0] || '').toLowerCase();
+        const c1 = (row[1] || '').toLowerCase();
+        const c2 = (row[2] || '').toLowerCase();
+        const c3 = (row[3] || '').toLowerCase();
+
+        const supplierMatch = s ? c0.includes(s) : true;
+        const materialMatch = m ? c1.includes(m) : true;
+        const brandMatch = b ? c2.includes(b) : true;
+        const specMatch = sp ? c3.includes(sp) : true;
+        const allMatch = all ? row.some(col => (col || '').toLowerCase().includes(all)) : true;
+
+        return supplierMatch && materialMatch && brandMatch && specMatch && allMatch;
+    });
+
+    if (filtered.length === 0) return;
+
+    filtered.forEach(row => {
+        let tr = "<tr>";
+        headers.forEach((_, i) => {
+            tr += `<td>${row[i] || ''}</td>`;
+        });
+        tr += "</tr>";
+        tbody.innerHTML += tr;
+    });
+}
+</script>
+
+</body>
+</html>

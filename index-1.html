@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>CSV / XLSX Search System</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=document_search" />
+    <!-- SheetJS + PapaParse (CDN). ถ้าต้องการ offline ให้ดาวน์โหลดไฟล์ .js มาเก็บ local แล้วเปลี่ยน src -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            /* ใช้ฟอนต์ Inter เพื่อความคมชัดและเป็นมาตรฐาน UI */
+            background: #f4f6f9;
+            /* สีพื้นหลังโทนอ่อน ช่วยให้ UI ดูโปร */
+            margin: 0;
+            /* ลบ margin default ของ browser */
+            padding: 20px;
+            /* เพิ่มระยะขอบรอบหน้าให้โปร่ง */
+            color: #333;
+            /* สีตัวอักษรหลัก อ่านง่าย ไม่ดำจนแข็งเกินไป */
+        }
+
+        .container {
+            max-width: 1400px;
+            /* จำกัดความกว้างสูงสุดของ UI */
+            margin: auto;
+            position: relative;
+            /* จัดให้อยู่กลางหน้าจอ */
+            background: #fff;
+            /* สีพื้นหลังกล่องเป็นสีขาว */
+            padding: 20px 28px;
+            /* ระยะห่างภายใน container */
+            border-radius: 12px;
+            /* มุมโค้งแบบ modern */
+            box-shadow: 0 6px 30px rgba(0, 0, 0, 0.06);
+            /* เงาอ่อนให้ความรู้สึก floating-card */
+            overflow-x: auto;
+            /* แสดง scrollbar แนวนอนเมื่อมีข้อมูลล้น */
+        }
+
+        /* Google Sheets status indicator (top-right) */
+        .gs-status {
+            position: absolute;
+            top: 16px;
+            right: 20px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            background: #f0f2f5;
+            color: #21304a;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .gs-status.ok{ background: #e6ffef; color: #087f3a; }
+        .gs-status.error{ background: #fff0f0; color: #b02a37; }
+        .gs-status.loading{ background: #fff8e6; color: #8a6b00; }
+
+        h2 {
+            text-align: center;
+            /* ชื่อหัวข้ออยู่กลาง */
+            margin-bottom: 18px;
+            /* ระยะห่างด้านล่าง */
+            font-size: 22px;
+            /* ขนาดหัวข้อ */
+            font-weight: 700;
+            /* ตัวหนาเพื่อเน้นส่วนหัว */
+            color: #21304a;
+            /* โทนสีเข้ม อ่านง่าย */
+            display: flex;
+            /* ใช้ flex เพื่อจัดไอคอน + ข้อความให้กึ่งกลาง */
+            align-items: center;
+            /* จัดกึ่งกลางแนวตั้ง */
+            gap: 10px;
+            /* ระยะห่างระหว่างไอคอนกับข้อความ */
+            justify-content: center;
+            /* จัดข้อความและไอคอนให้อยู่กลาง */
+        }
+
+        .form-group {
+            display: grid;
+            /* Layout แบบ Grid */
+            grid-template-columns: 120px 1fr;
+            /* คอลัมน์แรก = Label คงที่, คอลัมน์สอง = Input ยืดเต็มพื้นที่ */
+            gap: 10px;
+            /* ระยะห่างระหว่าง Label และ Input */
+            margin-bottom: 12px;
+            /* ระยะด้านล่างของแต่ละแถว */
+            align-items: center;
+            /* จัดให้องค์ประกอบในแถวอยู่กึ่งกลางแนวตั้ง */
+        }
+
+        label {
+            font-weight: 600;
+            /* ทำให้ Label อ่านชัด */
+            padding-top: 0%;
+            /* ขยับลงเล็กน้อยให้แนว align กับช่อง input สวยขึ้น */
+        }
+
+        input[type=text],
+        input[type=file],
+        select {
+            padding: 10px;
+            /* ระยะภายในช่อง input */
+            border: 1px solid #d0d7e5;
+            /* สีเส้นขอบนุ่มๆ */
+            border-radius: 8px;
+            /* มุมโค้ง modern UI */
+            font-size: 14px;
+            /* ขนาดตัวหนังสือมาตรฐานฟอร์ม */
+            width: 100%;
+            /* ให้ช่อง input ขยายเต็มคอลัมน์ */
+            box-sizing: border-box;
+            /* รวม padding ลงใน width เพื่อป้องกันช่องเกินขนาด */
+        }
+
+        #searchBtn {
+            display: flex;
+            /* ใช้ Flex จัดไอคอน + ตัวอักษรให้อยู่กึ่งกลาง */
+            gap: 8px;
+            /* ระยะห่างระหว่างไอคอนกับข้อความ */
+            align-items: center;
+            /* จัดกึ่งกลางแนวตั้ง */
+            justify-content: center;
+            /* จัดกึ่งกลางแนวนอน */
+
+            padding: 10px 20px;
+            /* ระยะภายในปุ่ม */
+            font-size: 16px;
+            /* ขนาดฟอนต์ของปุ่ม */
+            border-radius: 8px;
+            /* ปุ่มมุมโค้งสไตล์ modern */
+            background: #0066ff;
+            /* สีพื้นหลังปุ่มหลัก */
+
+            color: #fff;
+            /* สีข้อความในปุ่ม */
+            border: none;
+            /* เอาขอบปุ่มแบบ default ออก */
+            cursor: pointer;
+            /* เปลี่ยนเป็นรูปมือเมื่อ hover */
+            margin: 20px auto 0 auto;
+            /* จัดปุ่มให้อยู่กลาง + margin ด้านบน */
+        }
+
+        /* Hover Effect: เปลี่ยนสีเมื่อชี้เมาส์ */
+        #searchBtn:hover {
+            background: #004ecc;
+            /* สีเข้มขึ้นเล็กน้อยเมื่อ hover */
+        }
+
+        table {
+            width: 100%;
+            /* ตารางกินเต็มความกว้าง container */
+            border-collapse: collapse;
+            /* รวม borders ให้เรียบ ไม่มีซ้อนทับ */
+            margin-top: 0px;
+            /* ระยะห่างด้านบนก่อนถึงตาราง */
+            font-size: 14px;
+            /* ขนาดฟอนต์ใน cell */
+            border-spacing: 0;
+            /* ไม่มีระยะห่างระหว่างช่อง */
+        }
+
+        /* -----------------------------------------
+        Rounded Corner (เฉพาะ 4 มุมของตาราง)
+        ----------------------------------------- */
+        /* มุมบนซ้าย */
+        table thead th:first-child {
+            border-top-left-radius: 10px;
+        }
+
+        /* มุมบนขวา */
+        table thead th:last-child {
+            border-top-right-radius: 10px;
+        }
+
+        /* มุมล่างซ้าย */
+        table tbody tr:last-child td:first-child {
+            border-bottom-left-radius: 10px;
+        }
+
+        /* มุมล่างขวา */
+        table tbody tr:last-child td:last-child {
+            border-bottom-right-radius: 10px;
+        }
+
+        th {
+            background: #0b63ff;
+            /* สีพื้นหลังของหัวตาราง */
+            color: #fff;
+            /* สีตัวอักษร: ขาว */
+            padding: 10px;
+            /* เพิ่มระยะภายใน ช่วยให้ข้อความอ่านง่าย */
+            position: sticky;
+            /* ทำให้หัวตารางลอยค้างตอนสกอล์ลง */
+            top: 0;
+            /* กำหนดให้ sticky อยู่ติดด้านบนสุดของ container */
+            text-align: center;
+            /* จัดข้อความให้อยู่กลางแนวนอน */
+            vertical-align: middle;
+            /* จัดข้อความให้อยู่กลางแนวตั้ง */
+            white-space: nowrap;
+            /* ป้องกันไม่ให้ข้อความตัดบรรทัด */
+        }
+
+        td {
+            padding: 8px;
+            /* ระยะห่างภายใน cell */
+            border-bottom: 1px solid #e6eefc;
+            /* เส้นแบ่งแถวสีอ่อนเพื่อแยกข้อมูล */
+            text-align: center;
+            /* ข้อความอยู่กลางในแนวนอน */
+            vertical-align: middle;
+            /* ข้อความอยู่กลางในแนวตั้ง */
+            white-space: nowrap;
+            /* ไม่ให้ข้อความขึ้นบรรทัดใหม่ */
+            overflow: hidden;
+            /* ซ่อนข้อความที่ล้นกรอบ */
+            text-overflow: ellipsis;
+            /* แสดง ... เมื่อข้อความยาวเกิน */
+        }
+
+        .td-price {
+            text-align: right;
+            /* ชิดขวาเหมาะสำหรับตัวเลขด้านการเงิน */
+            font-variant-numeric: tabular-nums;
+            /* ตัวเลขความกว้างเท่ากัน (ดูเรียงตรงแนว) */
+            font-feature-settings: "tnum";
+            /* เปิดฟีเจอร์ tabular numbers ของฟอนต์ */
+            padding-right: 12px;
+            /* ระยะห่างด้านขวาเพิ่มความสบายตา */
+        }
+
+        tr:nth-child(even) {
+            background: #f8fbff;
+            /* แถวคู่เป็นสีฟ้าอ่อน ช่วยให้มองข้อมูลง่ายขึ้น */
+        }
+
+        #overlay {
+            display: none;
+            /* ซ่อนไว้ก่อน (จะเปิดด้วย JS เมื่อทำงาน) */
+            position: fixed;
+            /* ลอยทับทั้งหน้า ไม่เลื่อนตามสกอล์ */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+
+            background: rgba(0, 0, 0, 0.4);
+            /* ฉากหลังดำโปร่งแบบ overlay */
+            color: #fff;
+            /* ข้อความเป็นสีขาว */
+            font-size: 20px;
+            /* ขนาดตัวอักษร */
+            text-align: center;
+            /* ข้อความอยู่กลางแนวนอน */
+            padding-top: 18%;
+            /* ขยับข้อความลงมาตรงกลางหน้าแบบง่าย */
+            z-index: 999;
+            /* ให้อยู่เหนือทุก element */
+        }
+
+        /* ------------------------------------------------------------
+        Prevent First Row (tbody) from Wrapping
+        ใช้ในกรณีที่แถวแรกของข้อมูลต้องการให้แสดงแบบบรรทัดเดียว 
+        ป้องกันข้อความยาวตกบรรทัด
+        ------------------------------------------------------------ */
+        tbody tr:first-child td {
+            white-space: nowrap;
+            /* บังคับไม่ให้ตัดบรรทัด */
+        }
+
+        .no-data {
+            text-align: center;
+            /* ข้อความอยู่กลางช่อง */
+            padding: 15px;
+            /* เพิ่มพื้นที่ด้านในให้ดูอ่านง่าย */
+            color: #666;
+            /* สีเทา — เน้นว่าเป็นข้อความสถานะไม่ใช่ข้อมูล */
+        }
+
+        .td-desc {
+            text-align: left;
+            /* ชิดซ้ายเพื่อความอ่านง่าย */
+        }
+
+        /* สำหรับคอลัมน์ที่ต้องการให้ข้อความตัดขึ้นบรรทัดใหม่เมื่อยาวเกิน */
+        td:nth-child(1), /* Vendor Name */
+        td:nth-child(4), /* Brand */
+        .td-desc /* Supplier Description */ {
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .custom-file-wrapper {
+            display: flex;
+            /* จัดเรียงแนวนอน */
+            align-items: center;
+            /* จัดให้อยู่แนวตั้งกึ่งกลาง */
+            gap: 12px;
+            /* ระยะห่างระหว่างปุ่มกับชื่อไฟล์ */
+        }
+
+        #dataFile {
+            display: none;
+            /* ซ่อน input file ของ browser */
+        }
+
+        .file-name {
+            font-size: 14px;
+            color: #445;
+            /* สีเทาเข้ม อ่านง่าย */
+            font-style: italic;
+            /* ตัวเอียงแสดงสถานะ */
+            max-width: 300px;
+            /* จำกัดความกว้าง */
+            white-space: nowrap;
+            /* ไม่ขึ้นบรรทัดใหม่ */
+            overflow: hidden;
+            text-overflow: ellipsis;
+            /* แสดง ... เมื่อยาวเกิน */
+        }
+
+        .search-grid {
+            display: grid;
+            /* ใช้ layout แบบ Grid */
+            grid-template-columns: repeat(1, 1fr);
+            /* 2 คอลัมน์คงที่ */
+            gap: 16px 30px;
+            /* ระยะระหว่างช่องค้นหา */
+            margin-bottom: 0px;
+            /* ไม่ให้มีระยะด้านล่างของกรอบนี้ */
+        }
+
+        .search-grid > div {
+            display: grid;
+            /* จัดเรียง label และ input ในแถวเดียว */
+            grid-template-columns: 140px 1fr;
+            /* label ขนาดคงที่ 140px, input ยืดเต็มพื้นที่ */
+            gap: 10px;
+            /* ระยะห่างระหว่าง label กับ input */
+            align-items: center;
+            /* จัดให้กึ่งกลางแนวตั้ง */
+        }
+
+        .search-grid label {
+            font-weight: 600;
+            display: flex;
+            /* ไอคอน + ชื่อหัวข้ออยู่แถวเดียว */
+            align-items: center;
+            /* จัดให้เสมอกันแนวตั้ง */
+            gap: 6px;
+            /* ระยะห่างของไอคอน */
+            margin-bottom: 0px;
+            /* ไม่ต้องเว้นระยะด้านล่าง */
+            white-space: normal;
+            /* อนุญาตให้ข้อความตัดบรรทัด */
+            line-height: 1.3;
+            /* ระยะห่างบรรทัด */
+        }
+
+        .search-grid label .material-icons {
+            font-size: 20px;
+            /* ไอคอนขนาดเหมาะสม */
+            color: #21304a;
+            /* โทนสีเข้มแบบ professional UI */
+        }
+
+        .search-grid .input-icon input {
+            border-radius: 12px;
+            /* ช่องค้นหามุมโค้ง */
+        }
+
+        .table-wrapper {
+            max-height: 540px;
+            /* จำกัดความสูงโซนตาราง */
+            overflow-y: auto;
+            /* เลื่อนแนวตั้งเฉพาะในกล่อง */
+            overflow-x: auto;
+            /* รองรับตารางกว้างเกิน */
+            border-radius: 12px;
+            /* มุมโค้ง container */
+            top: 0;
+            /* ปกติใช้กับ sticky */
+        }
+
+        table thead th {
+            position: sticky;
+            /* ทำให้ติดด้านบน */
+            top: 0;
+            /* ติดบนสุดของกล่องตาราง */
+            z-index: 20;
+            /* อยู่เหนือข้อมูลในตาราง */
+            background: #0b63ff;
+            /* สีพื้นหัวตาราง */
+        }
+
+        #searchBtn {
+            width: 45%;
+            /* ความกว้างปุ่มเป็น 45% ของ container */
+            padding: 14px 20px;
+            /* ระยะห่างภายในปุ่ม (บน-ล่าง / ซ้าย-ขวา) */
+            border-radius: 14px;
+            /* มุมปุ่มโค้งมน */
+            background: linear-gradient(135deg, #0066ff, #00c6ff);
+            /* ไล่สีพื้นหลังแบบเอียง 135° */
+            color: #fff;
+            /* สีตัวอักษรเป็นสีขาว */
+            border: none;
+            /* ไม่มีเส้นขอบปุ่ม */
+            font-size: 17px;
+            /* ขนาดตัวอักษรของปุ่ม */
+            font-weight: 600;
+            /* น้ำหนักตัวอักษรหนา */
+            cursor: pointer;
+            /* เปลี่ยนเคอร์เซอร์เป็นรูปมือเมื่อชี้ */
+            margin-top: 10px;
+            /* เว้นระยะด้านบน 10px */
+            transition: 0.3s ease;
+            /* ทำให้เอฟเฟกต์ต่าง ๆ ลื่นไหล 0.3 วินาที */
+            display: flex;
+            /* ใช้ Flexbox เพื่อจัดไอคอน/ข้อความ */
+            justify-content: center;
+            /* จัดตำแหน่งแนวนอนให้อยู่กลาง */
+            gap: 8px;
+            /* ระยะห่างระหว่างไอคอนกับข้อความ */
+        }
+
+        #searchBtn:hover {
+            transform: translateY(-2px);
+            /* ยกขึ้น */
+            box-shadow: 0 8px 20px rgba(0, 102, 255, 0.35);
+            /* เงาเพิ่ม */
+        }
+
+        .custom-file-btn {
+            border: none;
+            /* เอาเส้นขอบออก */
+            padding: 8px 18px;
+            /* ระยะภายในปุ่ม */
+            border-radius: 10px;
+            /* มุมโค้ง */
+            font-size: 15px;
+            /* ขนาดตัวอักษร */
+            cursor: pointer;
+            /* เปลี่ยนเป็นมือเมื่อ hover */
+            display: flex;
+            /* จัด icon + text ในแนวนอน */
+            align-items: center;
+            /* จัดแนวตั้งอยู่กลาง */
+            gap: 6px;
+            /* ระยะห่างไอคอน */
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+            /* เงาปุ่ม */
+            transition: 0.25s;
+            /* ลื่นไหลตอน hover */
+            color: #fff;
+            /* ตัวอักษรสีขาว */
+
+            /* สีเริ่มต้น → แดง (ยังไม่เลือกไฟล์) */
+            background: linear-gradient(135deg, #ff4b4b, #e00000);
+        }
+
+        .custom-file-btn:hover {
+            background: linear-gradient(135deg, #f73333, #ff0000);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 14px rgba(0, 0, 0, 0.22);
+        }
+
+        .custom-file-btn.loaded {
+            /* เปลี่ยนเป็นสีเขียวหลังเลือกไฟล์ */
+            background: linear-gradient(135deg, #28a745, #1e7e34);
+        }
+
+        /* Hover effect — ใช้กับทั้งสีแดงและสีเขียว */
+        .custom-file-btn:hover {
+            transform: translateY(-2px);
+            /* ยกขึ้นเล็กน้อยตอน hover */
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2><span class="material-symbols-outlined">document_search</span> Information Search System</h2>
+        <div id="gsStatus" class="gs-status">Status: idle</div>
+
+        <div class="search-grid" style="margin-bottom: 20px;">
+            <div>
+                <label>
+                    <span class="material-icons">attach_file</span>
+                    File Source
+                </label>
+                <div class="custom-file-wrapper">
+                    <button type="button" class="custom-file-btn" id="btnSelectFile">
+                        <span class="material-icons">upload_file</span> Choose File
+                    </button>
+                    <span class="file-name" id="fileName">No file selected.</span>
+                    <input type="file" id="dataFile" accept=".csv,.xlsx,.xls">
+                </div>
+            </div>
+            <div>
+                <label>
+                    <span class="material-icons">store</span>
+                    Vendor Name
+                </label>
+                <div class="input-icon">
+                    <input type="text" id="vendor">
+                </div>
+            </div>
+
+            <div>
+                <label>
+                    <span class="material-icons">sell</span>
+                    Brand
+                </label>
+                <div class="input-icon">
+                    <input type="text" id="brand">
+                </div>
+            </div>
+
+            <div>
+                <label>
+                    <span class="material-icons">numbers</span>
+                    JDE Stock No
+                </label>
+                <div class="input-icon">
+                    <input type="text" id="jde">
+                </div>
+            </div>
+
+            <div>
+                <label>
+                    <span class="material-icons">qr_code</span>
+                    SAP Stock No
+                </label>
+                <div class="input-icon">
+                    <input type="text" id="sap">
+                </div>
+            </div>
+
+            <div>
+                <label>
+                    <span class="material-icons">category</span>
+                    Spare Part Type
+                </label>
+                <div class="input-icon">
+                    <input type="text" id="spareType">
+                </div>
+            </div>
+            <button id="searchBtn"><span class="material-icons">search</span>Search</button>
+        </div>
+        <div id="output"></div>
+    </div>
+
+    <div id="overlay">Processing...</div>
+
+    <script>
+        /* ------------ Column Aliases ------------- */
+        const aliasLists = {
+            "jde stock no": [
+                "jde stock no", "jde stock no.", "jde", "jde no", "jde code", "jde item no", "jde item number",
+                "jde sku", "jdestockno"],
+            "sap stock no": [
+                "sap stock no", "sap stock no.", "sap", "sap no", "material no", "material number", "sap item no"],
+            "quotation no": [
+                "quotation no", "quotation no.", "quotation number", "quote no", "quote number", "qt no", "qtn no"],
+            "vendor name": ["vendor name", "vendor", "supplier name", "supplier"],
+            "brand": ["brand", "manufacturer"],
+            "supplier description": ["description", "item description", "supplier description"],
+            "unit price": ["unit price", "price", "unit cost", "unit price (thb)", "unit price (thb) global contract", "unit price thb global contract"],
+            "lead time": ["lead time", "delivery time"],
+            "start date": ["start date", "effective date", "start"],
+            "end date": ["end date", "expiry date", "expire date", "valid to"],
+            "spare part type": ["spare part type", "spare part", "part type", "type", "spare type"],
+        };
+
+        /* ------------ Standard Columns ------------ */
+        const standardColumns = [
+            "Vendor Name", "JDE Stock No", "SAP Stock No", "Brand",
+            "Supplier Description", "Unit Price", "Lead Time",
+            "Start Date", "End Date", "Quotation No", "Credit Term"
+        ];
+
+        /* Helpers */
+        function norm(s) { return String(s || "").toLowerCase().replace(/[\n\r.\-_,()]/g, "").trim(); }
+
+        function matchHeader(h) {
+            const key = norm(h);
+            for (const std in aliasLists) {
+                for (const a of aliasLists[std]) {
+                    if (key === norm(a)) return std;
+                }
+            }
+            return null;
+        }
+
+        function escapeHTML(s) {
+            return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+        }
+
+        /* Format date */
+        function ddmmyyyy(v) {
+            if (!v) return "";
+
+            // 1) Excel serial number
+            if (typeof v === "number") {
+                const d = XLSX.SSF.parse_date_code(v);
+                if (d && d.y) {
+                    return `${String(d.d).padStart(2, '0')}-${String(d.m).padStart(2, '0')}-${d.y}`;
+                }
+            }
+
+            if (typeof v === "string") {
+                v = v.trim();
+
+                // 2) DD/MM/YYYY or DD-MM-YYYY
+                let m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+                if (m) {
+                    return `${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}-${m[3]}`;
+                }
+
+                // 3) MM/DD/YY  (เช่น 1/15/24)
+                m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
+                if (m) {
+                    const year = Number(m[3]) + 2000; // 24 → 2024
+                    return `${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}-${year}`;
+                }
+
+                // 4) YYYY-MM-DD
+                m = v.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+                if (m) {
+                    return `${String(m[3]).padStart(2, '0')}-${String(m[2]).padStart(2, '0')}-${m[1]}`;
+                }
+            }
+
+            return v; // fallback ถ้าอ่านไม่ออก
+        }
+
+        function showOverlay(x) {
+            document.getElementById("overlay").style.display = x ? "block" : "none";
+        }
+
+        /* ------------ Global Dataset (all sheets combined) ------------ */
+        let allData = [];
+
+        /* ------------ Google Sheets loader (public CSV export) ------------ */
+        // If you want automatic loading, set AUTO_GSHEET_URL to a public sheet URL.
+        const AUTO_GSHEET_URL = "https://docs.google.com/spreadsheets/d/1KQddH8khGnU-nFVeTT3urNueEJ1_R4yL/edit?usp=sharing&ouid=114342933923439825885&rtpof=true&sd=true";
+
+        function parseGSheetUrl(url){
+            try{
+                const idMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+                if(!idMatch) return null;
+                const id = idMatch[1];
+                const gidMatch = url.match(/[?&]gid=(\d+)/);
+                const gid = gidMatch ? gidMatch[1] : null;
+                return {id,gid};
+            }catch(e){return null;}
+        }
+
+        function loadGoogleSheetFromUrl(url){
+            const info = parseGSheetUrl(url);
+            if(!info){ setGStatus('error','Invalid Google Sheet URL'); return; }
+
+            const exportUrl = `https://docs.google.com/spreadsheets/d/${info.id}/export?format=csv${info.gid?('&gid='+info.gid):''}`;
+            setGStatus('loading','Loading...');
+            showOverlay(true);
+            fetch(exportUrl).then(r=>{
+                if(!r.ok) throw new Error('Failed to fetch sheet. It may not be public.');
+                return r.text();
+            }).then(text=>{
+                Papa.parse(text,{header:true,skipEmptyLines:true,complete:(res)=>{ 
+                    allData = []; 
+                    processSheet('GoogleSheet', res.data); 
+                    setGStatus('ok','Loaded'); showOverlay(false); 
+                    document.getElementById('fileName').textContent = "E-Catalog 2026.xlsx (Google Sheet)";
+                    document.getElementById('btnSelectFile').classList.add('loaded');
+                }, error:(err)=>{ setGStatus('error',err.message); alert(err.message); showOverlay(false); }});
+            }).catch(err=>{ setGStatus('error',err.message); alert('Error loading Google Sheet: '+err.message); showOverlay(false); });
+        }
+        
+        // Status helper for the top-right indicator
+        function setGStatus(state, msg){
+            const el = document.getElementById('gsStatus');
+            if(!el) return;
+            el.classList.remove('ok','error','loading');
+            if(state) el.classList.add(state);
+            el.textContent = msg ? msg : (state||'idle');
+        }
+
+        // Auto-load if AUTO_GSHEET_URL is set
+        window.addEventListener('load', ()=>{
+            if(AUTO_GSHEET_URL){
+                try{
+                    loadGoogleSheetFromUrl(AUTO_GSHEET_URL);
+                }catch(e){ console.warn('Auto load failed', e); setGStatus('error','Auto-load failed'); }
+            }
+        });
+
+        /* File loader */
+        document.getElementById("dataFile").addEventListener("change", e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            showOverlay(true);
+            allData = [];
+
+            const ext = file.name.split(".").pop().toLowerCase();
+            if (ext === "csv") {
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (res) => { processSheet("CSV", res.data); showOverlay(false); },
+                    error: (err) => { alert(err.message); showOverlay(false); }
+                });
+            } else {
+                const r = new FileReader();
+                r.onload = evt => {
+                    const wb = XLSX.read(evt.target.result, { type: "array" });
+                    wb.SheetNames.forEach(name => {
+                        const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: "", raw: false });
+                        processSheet(name, rows);
+                    });
+                    showOverlay(false);
+                };
+                r.readAsArrayBuffer(file);
+            }
+        });
+
+        /* Process a sheet */
+        function processSheet(name, rows) {
+            if (rows.length === 0) return;
+
+            const headers = Object.keys(rows[0]);
+            const headerMap = {};
+
+            headers.forEach(h => {
+                const std = matchHeader(h);
+                if (std) headerMap[std] = h;
+                else headerMap[norm(h)] = h;
+            });
+
+            console.log("Sheet:", name, "Headers:", headers);
+
+            rows.forEach(row => {
+                const obj = {};
+                const spareCol = headerMap["spare part type"];
+                obj["Spare Part Type"] = spareCol ? row[spareCol] : "";
+                standardColumns.forEach(std => {
+                    let col = headerMap[std] || headerMap[norm(std)];
+                    let val = col ? row[col] : "";
+                    if (std === "Start Date" || std === "End Date") val = ddmmyyyy(val);
+                    obj[std] = val ?? "";
+                });
+                allData.push(obj);
+            });
+        }
+
+        /* Search Function */
+        document.getElementById("searchBtn").addEventListener("click", search);
+
+        ["vendor", "jde", "sap", "brand", "spareType"].forEach(id => {
+            document.getElementById(id).addEventListener("keydown", e => {
+                if (e.key === "Enter") search();
+            });
+        });
+
+        function search() {
+            if (allData.length === 0) {
+                renderNoData("No data found ( Please upload a file )");
+                return;
+            }
+
+            const vendor = document.getElementById("vendor").value.toLowerCase().trim();
+            const jde = document.getElementById("jde").value.toLowerCase().trim();
+            const sap = document.getElementById("sap").value.toLowerCase().trim();
+            const brand = document.getElementById("brand").value.toLowerCase().trim();
+            const spareType = document.getElementById("spareType").value.toLowerCase().trim();
+
+            // ⛔ ถ้าไม่กรอกอะไรเลย → แสดง No data found ในตาราง
+            if (!vendor && !jde && !sap && !brand && !spareType) {
+                renderNoData("( Please enter search keywords )");
+                return;
+            }
+
+            const filtered = allData.filter(r =>
+                (!vendor || (r["Vendor Name"] && r["Vendor Name"].toLowerCase().includes(vendor))) &&
+                (!jde || (r["JDE Stock No"] && r["JDE Stock No"].toLowerCase().includes(jde))) &&
+                (!sap || (r["SAP Stock No"] && r["SAP Stock No"].toLowerCase().includes(sap))) &&
+                (!brand || (r["Brand"] && r["Brand"].toLowerCase().includes(brand))) &&
+                (!spareType || (r["Spare Part Type"] && r["Spare Part Type"].toLowerCase().includes(spareType)))
+            );
+
+            renderTable(filtered);
+        }
+
+        function renderNoData(msg) {
+            const out = document.getElementById("output");
+            out.innerHTML = `
+        <table><thead><tr><th>Result</th></tr></thead>
+        <tbody><tr><td class="no-data">${msg}</td></tr></tbody></table>
+    `;
+        }
+
+        function formatAccounting(val) {
+            if (val === null || val === undefined || val === "") return "";
+
+            // แปลง string → number
+            let num = Number(String(val).replace(/,/g, ""));
+            if (isNaN(num)) return val;
+
+            // รูปแบบ accounting
+            if (num < 0) {
+                return `(${Math.abs(num).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                })})`;
+            }
+
+            return num.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        /* Render */
+        function renderTable(rows) {
+            const out = document.getElementById("output");
+            if (rows.length === 0) {
+                out.innerHTML = `
+        <div class="table-wrapper">
+            <table>
+                <thead><tr><th>Result</th></tr></thead>
+                <tbody><tr><td class="no-data">( No data found )</td></tr></tbody>
+            </table>
+        </div>`;
+                return;
+            }
+
+            let html = `<div class="table-wrapper"><table><thead><tr>`;
+            standardColumns.forEach(c => html += `<th>${escapeHTML(c)}</th>`);
+            html += "</tr></thead><tbody>";
+
+            rows.forEach(r => {
+                html += "<tr>";
+                standardColumns.forEach(c => {
+
+                    // Supplier Description
+                    if (c === "Supplier Description") {
+                        html += `<td class="td-desc">${escapeHTML(r[c])}</td>`;
+
+                        // Unit Price
+                    } else if (c === "Unit Price") {
+                        html += `<td class="td-price">${formatAccounting(r[c])}</td>`;
+
+                        // Others
+                    } else {
+                        html += `<td>${escapeHTML(r[c])}</td>`;
+                    }
+
+                });
+                html += "</tr>";
+            });
+
+            html += "</tbody></table></div>";
+            out.innerHTML = html;
+        }
+
+        // ปุ่มสั่งให้ input file เปิด dialog
+        document.getElementById("btnSelectFile").addEventListener("click", () => {
+            document.getElementById("dataFile").click();
+        });
+
+        document.getElementById("dataFile").addEventListener("change", function () {
+            const fileLabel = document.getElementById("fileName");
+            const btn = document.getElementById("btnSelectFile");
+
+            if (this.files.length > 0) {
+                fileLabel.textContent = this.files[0].name;
+                btn.classList.add("loaded");   // เปลี่ยนเป็นสีเขียว
+            } else {
+                fileLabel.textContent = "No file selected";
+                btn.classList.remove("loaded"); // กลับเป็นสีแดง
+            }
+        });
+
+    </script>
+
+</body>
+
+</html>

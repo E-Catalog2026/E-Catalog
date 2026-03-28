@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CSV Information Search</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+<style>
+    body { font-family: "Inter", Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 30px; color: #333; }
+    .container { max-width: 1500px; width: 100%; margin: auto; background: #fff; padding: 25px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    h2 { text-align: center; margin-bottom: 25px; font-size: 26px; font-weight: 700; color: #2c3e50; }
+    .form-group { display: grid; grid-template-columns: 150px 1fr; gap: 10px; margin-bottom: 12px; }
+    label { font-weight: 600; padding-top: 6px; }
+    input[type="text"], input[type="file"] { padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 15px; }
+    button { display: flex; align-items: center; justify-content: center; gap: 5px; width: 100%; margin-top: 15px; padding: 12px; background: #0066ffef; color: #fff; border: none; border-radius: 10px; font-size: 18px; cursor: pointer; transition: 0.2s; }
+    button:hover { background: #004ecc; }
+    table { width: 100%; border-collapse: collapse; margin-top: 25px; font-size: 15px; }
+    th { background: #0066ff; color: #fff; padding: 10px; position: sticky; top: 0; }
+    td { padding: 10px; border-bottom: 1px solid #ddd; }
+    tr:nth-child(even) { background: #f2f7ff; }
+    .no-data { text-align: center; padding: 15px; color: #999; }
+    #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); color: #fff; font-size: 24px; text-align: center; padding-top: 20%; z-index: 999; }
+</style>
+</head>
+<body>
+
+<div class="container">
+<h2>Information Search System</h2>
+
+<div class="form-group">
+    <label>Select .CSV file:</label>
+    <input type="file" id="csvFile" accept=".csv">
+</div>
+<div class="form-group"><label>Vendor Name:</label><input type="text" id="vendor"></div>
+<div class="form-group"><label>JDE Stock No:</label><input type="text" id="jde"></div>
+<div class="form-group"><label>SAP Stock No:</label><input type="text" id="sap"></div>
+<div class="form-group"><label>Brand:</label><input type="text" id="brand"></div>
+
+<button id="searchBtn"><span class="material-icons">search</span>Search</button>
+
+<table id="resultTable">
+    <thead><tr id="headerRow"></tr></thead>
+    <tbody></tbody>
+</table>
+
+<div id="overlay">Processing...</div>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script>
+
+let data = [];
+
+const targetColumns = [
+    "Vendor Name","JDE Stock No","SAP Stock No","Brand",
+    "Supplier Description","Unit Price","Lead Time",
+    "Start Date","End Date","Quotation No","Credit Term"
+];
+
+const headerRow = document.getElementById("headerRow");
+
+// Safe HTML escape
+function escapeHTML(str) {
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// Show/hide loading overlay
+function showOverlay(show) {
+    document.getElementById("overlay").style.display = show ? "block" : "none";
+}
+
+// Build table header (only once)
+headerRow.innerHTML = targetColumns.map(col => `<th>${escapeHTML(col)}</th>`).join("");
+
+// File upload handler
+document.getElementById("csvFile").addEventListener("change", function (e) {
+
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // File size limit (10 MB)
+    if (file.size > 10 * 1024 * 1024) {
+        alert("File is too large (max 10MB).");
+        return;
+    }
+
+    // Validate file type
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+        alert("Invalid file type. Please select a .CSV file.");
+        return;
+    }
+
+    // Reset old data
+    data = [];
+    document.querySelector("#resultTable tbody").innerHTML = "";
+
+    showOverlay(true);
+
+    Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+
+        complete: function (results) {
+
+            try {
+                const rawHeaders = results.meta.fields || [];
+
+                // Strip BOM from first header
+                rawHeaders[0] = rawHeaders[0]?.replace(/^\ufeff/, "");
+
+                if (rawHeaders.length === 0) {
+                    alert("CSV has no header row.");
+                    showOverlay(false);
+                    return;
+                }
+
+                // Build case-insensitive header map
+                const headerMap = {};
+                rawHeaders.forEach(h => headerMap[h.toLowerCase()] = h);
+
+                // Check required columns
+                const missing = targetColumns.filter(col => !headerMap[col.toLowerCase()]);
+                if (missing.length > 0) {
+                    alert("Missing required columns: " + missing.join(", "));
+                    showOverlay(false);
+                    return;
+                }
+
+                // Convert rows safely
+                data = results.data.map(row => {
+                    const obj = {};
+                    targetColumns.forEach(col => {
+                        const actualCol = headerMap[col.toLowerCase()];
+                        obj[col] = row[actualCol] == null ? "" : row[actualCol].toString().trim();
+                    });
+                    return obj;
+                });
+
+            } catch (err) {
+                alert("CSV parsing error: " + err.message);
+                data = [];
+            }
+
+            showOverlay(false);
+        },
+
+        error: function (err) {
+            alert("Error reading CSV: " + err.message);
+            showOverlay(false);
+        }
+    });
+});
+
+// *** Search function ***
+function searchData() {
+
+    if (data.length === 0) {
+        alert("Please upload a CSV file first.");
+        return;
+    }
+
+    showOverlay(true);
+
+    const vendor = document.getElementById("vendor").value.trim().toLowerCase();
+    const jde = document.getElementById("jde").value.trim().toLowerCase();
+    const sap = document.getElementById("sap").value.trim().toLowerCase();
+    const brand = document.getElementById("brand").value.trim().toLowerCase();
+
+    const tbody = document.querySelector("#resultTable tbody");
+    tbody.innerHTML = "";
+
+    if (!vendor && !jde && !sap && !brand) {
+        tbody.innerHTML = `<tr><td colspan="${targetColumns.length}" class="no-data">No data found</td></tr>`;
+        showOverlay(false);
+        return;
+    }
+
+    const filtered = data.filter(row => {
+        return (!vendor || row["Vendor Name"].toLowerCase().includes(vendor)) &&
+               (!jde || row["JDE Stock No"].toLowerCase().includes(jde)) &&
+               (!sap || row["SAP Stock No"].toLowerCase().includes(sap)) &&
+               (!brand || row["Brand"].toLowerCase().includes(brand));
+    });
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${targetColumns.length}" class="no-data">No data found</td></tr>`;
+    } else {
+        const html = filtered.map(row =>
+            `<tr>${targetColumns.map(col => `<td>${escapeHTML(row[col])}</td>`).join("")}</tr>`
+        ).join("");
+
+        tbody.innerHTML = html;
+    }
+
+    showOverlay(false);
+}
+
+// Enter to search
+["vendor","jde","sap","brand"].forEach(id => {
+    document.getElementById(id).addEventListener("keydown", e => {
+        if (e.key === "Enter") searchData();
+    });
+});
+
+document.getElementById("searchBtn").addEventListener("click", searchData);
+
+</script>
+
+</body>
+</html>

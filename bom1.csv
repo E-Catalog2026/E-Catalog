@@ -1,0 +1,21 @@
+Item,Vendor No,Vendor Name,JDE Stock No,SAP Stock No,Brand,Spare part Type,Supplier Part no,SAP description,Supplier Description,QTY,UM,Unit Price,Lead Time,Start Date,End date,Quotation No,Credit Term
+IT-46496,VND-69106,Global Supply Co.,JDE-37214,SAP-48957,Schneider,Switch,SP-66637,Breaker part 2SOV7G,High quality Switch,71,SET,46329.77,15,2024-02-08,2024-04-16,QT-2025-47293,45 Days
+IT-12439,VND-63432,Global Supply Co.,JDE-22796,SAP-24362,Schneider,Motor,SP-92254,Controller part GLCQSL,High quality Controller,13,SET,8637.55,23,2024-09-06,2025-01-18,QT-2025-34462,60 Days
+IT-95420,VND-58511,Alpha Tech Ltd.,JDE-94143,SAP-44876,Omron,Cable,SP-68321,Controller part V9XY55,High quality Switch,53,SET,18984.23,5,2024-01-18,2024-05-19,QT-2025-17494,30 Days
+IT-29207,VND-66262,Global Supply Co.,JDE-73799,SAP-68722,ABB,Breaker,SP-87988,Module part X9CRGB,High quality Switch,10,BOX,3588.44,41,2025-04-18,2025-06-01,QT-2025-80206,60 Days
+IT-99352,VND-27014,Future Power Co.,JDE-70889,SAP-50550,Mitsubishi,Sensor,SP-29587,Module part W45SUO,High quality Switch,22,BOX,29811.21,13,2025-03-15,2025-06-01,QT-2025-49743,30 Days
+IT-15586,VND-45703,Global Supply Co.,JDE-62093,SAP-33402,Mitsubishi,Sensor,SP-37657,Controller part XQFZNL,High quality Module,36,SET,29709.07,11,2025-02-23,2025-06-23,QT-2025-65985,45 Days
+IT-58634,VND-46424,Global Supply Co.,JDE-72320,SAP-70917,Fuji,Controller,SP-36904,Switch part MYN7AV,High quality Breaker,2,BOX,41405.45,50,2024-12-02,2025-05-17,QT-2025-81432,60 Days
+IT-28449,VND-66210,Alpha Tech Ltd.,JDE-57181,SAP-61382,Mitsubishi,Module,SP-87200,Sensor part Z6VVYB,High quality Breaker,88,SET,27297.06,59,2025-11-09,2026-01-19,QT-2025-65850,45 Days
+IT-72044,VND-19785,Global Supply Co.,JDE-68257,SAP-55208,Siemens,Motor,SP-15352,Breaker part 2RF8UW,High quality Sensor,22,SET,9333.6,4,2024-04-02,2024-08-10,QT-2025-56397,30 Days
+IT-18025,VND-10954,Global Supply Co.,JDE-12353,SAP-90009,Omron,Sensor,SP-54066,Sensor part 3EIA1J,High quality Cable,29,PCS,24403.02,39,2024-10-20,2025-01-08,QT-2025-60256,60 Days
+IT-34669,VND-66373,Future Power Co.,JDE-89535,SAP-12136,Mitsubishi,Cable,SP-57897,Breaker part 2WI9DI,High quality Cable,14,PCS,45152.42,32,2025-06-09,2025-08-20,QT-2025-77766,30 Days
+IT-78884,VND-90106,Future Power Co.,JDE-71010,SAP-32365,Schneider,Controller,SP-16096,Sensor part VCPE2H,High quality Controller,12,PCS,30936.24,42,2025-08-07,2025-09-08,QT-2025-25817,45 Days
+IT-33547,VND-98827,Global Supply Co.,JDE-50940,SAP-64719,Omron,Breaker,SP-42594,Motor part HZV8ZR,High quality Cable,30,SET,32730.19,7,2024-10-25,2025-02-23,QT-2025-88732,45 Days
+IT-40822,VND-47917,Alpha Tech Ltd.,JDE-36465,SAP-94958,Schneider,Sensor,SP-41121,Motor part 9OPFBQ,High quality Sensor,8,BOX,44901.44,43,2025-08-02,2026-01-14,QT-2025-45434,30 Days
+IT-39910,VND-15528,Global Supply Co.,JDE-71730,SAP-75479,Schneider,Sensor,SP-32119,Sensor part DOC07J,High quality Switch,13,SET,17156.41,41,2025-05-09,2025-08-06,QT-2025-44902,60 Days
+IT-18733,VND-71118,Future Power Co.,JDE-50774,SAP-39537,Omron,Cable,SP-51201,Breaker part Z0JIU5,High quality Motor,97,SET,3339.67,56,2024-07-02,2024-12-22,QT-2025-52805,60 Days
+IT-23958,VND-55628,"Siam Engineering Co.,Ltd.",JDE-44764,SAP-90896,Fuji,Controller,SP-89793,Cable part NCV0LF,High quality Controller,89,PCS,10339.5,9,2024-01-30,2024-04-30,QT-2025-40327,30 Days
+IT-30644,VND-87633,"Siam Engineering Co.,Ltd.",JDE-95559,SAP-22505,Keyence,Cable,SP-12297,Controller part QNVY2L,High quality Sensor,70,BOX,8814.3,18,2024-06-07,2024-09-19,QT-2025-88399,30 Days
+IT-78334,VND-61184,Global Supply Co.,JDE-20353,SAP-97803,Keyence,Controller,SP-79933,Switch part RA2DVK,High quality Controller,13,SET,43289.1,16,2025-02-09,2025-03-22,QT-2025-89597,45 Days
+IT-16754,VND-73914,Global Supply Co.,JDE-30904,SAP-46023,Mitsubishi,Controller,SP-83571,Switch part R9O4SW,High quality Switch,86,PCS,18153.03,50,2024-07-02,2024-10-13,QT-2025-16651,60 Days
