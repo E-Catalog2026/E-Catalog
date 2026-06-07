@@ -349,6 +349,105 @@ tbody tr:first-child td {
     /* ชิดซ้ายเพื่อความอ่านง่าย */
 }
 
+.photo-cell {
+    text-align: center;
+}
+
+.photo-icon-btn {
+    border: none;
+    background: #e9f3ff;
+    color: #0066ff;
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 6px 16px rgba(0, 102, 255, 0.14);
+}
+
+.photo-icon-btn:hover {
+    background: #d6e8ff;
+    transform: translateY(-1px);
+}
+
+.no-image {
+    color: #6f7b8a;
+    font-style: italic;
+}
+
+.photo-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(18, 39, 64, 0.75);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.photo-modal.open {
+    display: flex;
+}
+
+.photo-card {
+    width: min(560px, 100%);
+    background: #ffffff;
+    border-radius: 22px;
+    padding: 24px;
+    box-shadow: 0 24px 60px rgba(9, 30, 66, 0.18);
+    position: relative;
+    overflow: hidden;
+}
+
+.photo-card-title {
+    margin-bottom: 18px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #102a43;
+}
+
+.photo-card-image {
+    width: 100%;
+    max-height: 520px;
+    object-fit: contain;
+    border-radius: 16px;
+    background: #f8fbff;
+}
+
+.photo-card-caption {
+    margin-top: 16px;
+    font-size: 13px;
+    color: #42526e;
+    word-break: break-word;
+}
+
+.photo-modal-close {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: none;
+    background: #f8f9fb;
+    color: #102a43;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+}
+
+.photo-modal-close:hover {
+    background: #ecf2ff;
+}
+
 /* สำหรับคอลัมน์ที่ต้องการให้ข้อความตัดขึ้นบรรทัดใหม่เมื่อยาวเกิน */
 td:nth-child(1), /* Vendor Name */
 td:nth-child(4), /* Brand */

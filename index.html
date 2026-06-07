@@ -92,9 +92,26 @@
                     <input type="text" id="spareType">
                 </div>
             </div>
+            <div>
+                <label>
+                    <span class="material-icons">article</span>
+                    <span data-i18n="supplier_description">Supplier Description</span>
+                </label>
+                <div class="input-icon">
+                    <input type="text" id="descriptionSearch">
+                </div>
+            </div>
             <button id="searchBtn"><span class="material-icons">search</span><span data-i18n="search">Search</span></button>
         </div>
         <div id="output"></div>
+    </div>
+
+    <div id="photoModal" class="photo-modal" aria-hidden="true">
+        <div class="photo-card" role="dialog" aria-modal="true" aria-labelledby="photoModalTitle">
+            <button id="photoModalClose" class="photo-modal-close" type="button" aria-label="Close preview">×</button>
+            <div id="photoModalTitle" class="photo-card-title"></div>
+            <img id="photoModalImage" class="photo-card-image" src="" alt="">
+        </div>
     </div>
 
     <div id="overlay" data-i18n="processing">Processing...</div>
@@ -117,12 +134,14 @@
             "start date": ["start date", "effective date", "start"],
             "end date": ["end date", "expiry date", "expire date", "valid to"],
             "spare part type": ["spare part type", "spare part", "part type", "type", "spare type"],
+            "supplier description th": ["supplier description th", "supplier description thai", "supplier description (th)", "description th", "description thai", "item description th"],
+            "photos": ["photo", "photos", "image", "images", "photo url", "image url"]
         };
 
         /* ------------ Standard Columns ------------ */
         const standardColumns = [
             "Vendor Name", "JDE Stock No", "SAP Stock No", "Brand",
-            "Supplier Description", "Unit Price", "Lead Time",
+            "Supplier Description", "Photos", "Unit Price", "Lead Time",
             "Start Date", "End Date", "Quotation No", "Credit Term"
         ];
 
@@ -136,6 +155,16 @@
                 jde_stock_no: "JDE Stock No",
                 sap_stock_no: "SAP Stock No",
                 spare_part_type: "Spare Part Type",
+                supplier_description: "Supplier Description",
+                unit_price: "Unit Price",
+                lead_time: "Lead Time",
+                start_date: "Start Date",
+                end_date: "End Date",
+                quotation_no: "Quotation No",
+                credit_term: "Credit Term",
+                photos: "Photos",
+                photo_preview: "Photo Preview",
+                no_image: "No Image",
                 search: "Search",
                 processing: "Processing...",
                 status_idle: "Status: connected",
@@ -152,15 +181,59 @@
                 jde_stock_no: "เลข JDE",
                 sap_stock_no: "เลข SAP",
                 spare_part_type: "ประเภทอะไหล่",
+                supplier_description: "คำอธิบายสินค้า",
+                unit_price: "ราคาต่อหน่วย",
+                lead_time: "ระยะเวลาจัดส่ง",
+                start_date: "วันที่เริ่มต้น",
+                end_date: "วันที่สิ้นสุด",
+                quotation_no: "หมายเลขใบเสนอราคา",
+                credit_term: "เงื่อนไขการชำระเงิน",
+                photos: "รูปภาพ",
+                photo_preview: "รูปภาพตัวอย่าง",
+                no_image: "ไม่มีรูปภาพ",
                 search: "ค้นหา",
                 processing: "กำลังประมวลผล...",
                 status_idle: "สถานะ: เชื่อมต่อแล้ว",
                 no_data_upload: "ไม่พบข้อมูล ( กรุณาอัปโหลดไฟล์ )",
                 enter_keywords: "( กรุณากรอกคำค้น )",
                 no_data_found: "( ไม่พบข้อมูล )",
+                photo_preview: "รูปภาพตัวอย่าง",
                 result: "ผลลัพธ์"
             }
         };
+
+        const descriptionTranslationMap = {
+            // ถ้าต้องการแปลคำอธิบายสินค้าด้วยตัวเอง ให้เพิ่มคู่คำแปลที่นี่
+            "pump": "ปั๊ม",
+            "cement": "ปูน",
+            "steel pipe": "ท่อเหล็ก",
+            "insulation board": "แผ่นฉนวน"
+        };
+
+        function translateSupplierDescription(value){
+            if (!value) return value;
+            const key = value.toString().trim().toLowerCase();
+            return descriptionTranslationMap[key] || value;
+        }
+
+        const headerTranslationKeys = {
+            "Vendor Name": "vendor_name",
+            "JDE Stock No": "jde_stock_no",
+            "SAP Stock No": "sap_stock_no",
+            "Brand": "brand",
+            "Supplier Description": "supplier_description",
+            "Photos": "photos",
+            "Unit Price": "unit_price",
+            "Lead Time": "lead_time",
+            "Start Date": "start_date",
+            "End Date": "end_date",
+            "Quotation No": "quotation_no",
+            "Credit Term": "credit_term"
+        };
+
+        function headerLabel(key) {
+            return t(headerTranslationKeys[key] || key);
+        }
 
         let currentLang = localStorage.getItem('lang') || 'en';
 
@@ -349,6 +422,7 @@
             rows.forEach(row => {
                 const obj = {};
                 const spareCol = headerMap["spare part type"];
+                const translatedDescCol = headerMap["supplier description th"];
                 obj["Spare Part Type"] = spareCol ? row[spareCol] : "";
                 standardColumns.forEach(std => {
                     let col = headerMap[std] || headerMap[norm(std)];
@@ -356,6 +430,7 @@
                     if (std === "Start Date" || std === "End Date") val = ddmmyyyy(val);
                     obj[std] = val ?? "";
                 });
+                obj["Supplier Description TH"] = translatedDescCol ? row[translatedDescCol] : "";
                 allData.push(obj);
             });
         }
@@ -363,7 +438,44 @@
         /* Search Function */
         document.getElementById("searchBtn").addEventListener("click", search);
 
-        ["vendor", "jde", "sap", "brand", "spareType"].forEach(id => {
+        function openPhotoModal(url) {
+            const modal = document.getElementById('photoModal');
+            const img = document.getElementById('photoModalImage');
+            const title = document.getElementById('photoModalTitle');
+            if (!url) return;
+            img.src = url;
+            img.alt = t('photo_preview');
+            title.textContent = t('photo_preview');
+            modal.classList.add('open');
+            modal.setAttribute('aria-hidden', 'false');
+        }
+
+        function closePhotoModal() {
+            const modal = document.getElementById('photoModal');
+            const img = document.getElementById('photoModalImage');
+            if (!modal) return;
+            modal.classList.remove('open');
+            modal.setAttribute('aria-hidden', 'true');
+            if (img) img.src = '';
+        }
+
+        document.addEventListener('click', event => {
+            const button = event.target.closest('.photo-icon-btn');
+            if (button) {
+                openPhotoModal(button.dataset.url);
+            }
+            if (event.target.matches('#photoModal') || event.target.matches('#photoModalClose')) {
+                closePhotoModal();
+            }
+        });
+
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                closePhotoModal();
+            }
+        });
+
+        ["vendor", "jde", "sap", "brand", "spareType", "descriptionSearch"].forEach(id => {
             document.getElementById(id).addEventListener("keydown", e => {
                 if (e.key === "Enter") search();
             });
@@ -380,20 +492,26 @@
             const sap = document.getElementById("sap").value.toLowerCase().trim();
             const brand = document.getElementById("brand").value.toLowerCase().trim();
             const spareType = document.getElementById("spareType").value.toLowerCase().trim();
+            const descriptionSearch = document.getElementById("descriptionSearch").value.toLowerCase().trim();
 
             // ⛔ ถ้าไม่กรอกอะไรเลย → แสดง No data found ในตาราง
-            if (!vendor && !jde && !sap && !brand && !spareType) {
+            if (!vendor && !jde && !sap && !brand && !spareType && !descriptionSearch) {
                 renderNoData("( Please enter search keywords )");
                 return;
             }
 
-            const filtered = allData.filter(r =>
-                (!vendor || (r["Vendor Name"] && r["Vendor Name"].toLowerCase().includes(vendor))) &&
-                (!jde || (r["JDE Stock No"] && r["JDE Stock No"].toLowerCase().includes(jde))) &&
-                (!sap || (r["SAP Stock No"] && r["SAP Stock No"].toLowerCase().includes(sap))) &&
-                (!brand || (r["Brand"] && r["Brand"].toLowerCase().includes(brand))) &&
-                (!spareType || (r["Spare Part Type"] && r["Spare Part Type"].toLowerCase().includes(spareType)))
-            );
+            const filtered = allData.filter(r => {
+                const descEn = (r["Supplier Description"] || "").toString().toLowerCase();
+                const descTh = (r["Supplier Description TH"] || translateSupplierDescription(r["Supplier Description"]) || "").toString().toLowerCase();
+                return (
+                    (!vendor || (r["Vendor Name"] && r["Vendor Name"].toLowerCase().includes(vendor))) &&
+                    (!jde || (r["JDE Stock No"] && r["JDE Stock No"].toLowerCase().includes(jde))) &&
+                    (!sap || (r["SAP Stock No"] && r["SAP Stock No"].toLowerCase().includes(sap))) &&
+                    (!brand || (r["Brand"] && r["Brand"].toLowerCase().includes(brand))) &&
+                    (!spareType || (r["Spare Part Type"] && r["Spare Part Type"].toLowerCase().includes(spareType))) &&
+                    (!descriptionSearch || descEn.includes(descriptionSearch) || descTh.includes(descriptionSearch))
+                );
+            });
 
             renderTable(filtered);
         }
@@ -442,26 +560,27 @@
             }
 
             let html = `<div class="table-wrapper"><table><thead><tr>`;
-            standardColumns.forEach(c => html += `<th>${escapeHTML(c)}</th>`);
+            standardColumns.forEach(c => html += `<th>${escapeHTML(headerLabel(c))}</th>`);
             html += "</tr></thead><tbody>";
 
             rows.forEach(r => {
                 html += "<tr>";
                 standardColumns.forEach(c => {
-
-                    // Supplier Description
-                    if (c === "Supplier Description") {
-                        html += `<td class="td-desc">${escapeHTML(r[c])}</td>`;
-
-                        // Unit Price
+                    if (c === "Photos") {
+                        const photoUrl = String(r[c] || "").trim();
+                        if (photoUrl) {
+                            html += `<td class="photo-cell"><button type="button" class="photo-icon-btn" data-url="${escapeHTML(photoUrl)}" title="${escapeHTML(t('photo_preview'))}"><span class="material-icons">image</span></button></td>`;
+                        } else {
+                            html += `<td class="no-image">${escapeHTML(t('no_image'))}</td>`;
+                        }
+                    } else if (c === "Supplier Description") {
+                        const desc = currentLang === 'th' ? (r["Supplier Description TH"] || translateSupplierDescription(r[c])) : r[c];
+                        html += `<td class="td-desc">${escapeHTML(desc)}</td>`;
                     } else if (c === "Unit Price") {
                         html += `<td class="td-price">${formatAccounting(r[c])}</td>`;
-
-                        // Others
                     } else {
                         html += `<td>${escapeHTML(r[c])}</td>`;
                     }
-
                 });
                 html += "</tr>";
             });
